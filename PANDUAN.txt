@@ -1,2 +1,2 @@
-POS KasirKu website v2 — 27 November 2026
-Backup repository lama terlebih dahulu. Upload seluruh isi folder ini (bukan ZIP) ke root repository teknologia-tech.github.io; pertahankan app-ads.txt yang sudah valid jika ada. Commit perubahan. Settings > Pages: main / (root). Cek semua halaman melalui HTTPS dan mode penyamaran. Jangan upload source Flutter, kunci atau data pelanggan. Kebijakan privasi merupakan draf berbasis source referensi, belum audit backend produksi.
+POS KasirKu Website v2.1
+Upload seluruh isi folder ke root repository teknologia-tech.github.io, termasuk assets. Pertahankan URL privacy.html. CSS dan JS baru menggunakan nama style-v21.css dan site-v21.js untuk menghindari cache lama. Jangan menimpa app-ads.txt jika sudah ada. Setelah deployment, buka website dan Ctrl+F5. GitHub Pages tetap hosting statis; backend belum tersedia.
