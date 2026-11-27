@@ -5,8 +5,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex,nofollow">
 <title>Verifikasi Keamanan | POS KasirKu</title>
+
 <style>
 * { box-sizing: border-box; }
 body {
@@ -14,7 +15,7 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 16px;
   background: #edf5f2;
   font-family: system-ui, sans-serif;
   color: #173e36;
@@ -58,13 +59,23 @@ button {
   padding: 9px 14px;
   cursor: pointer;
 }
-#retry {
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+#retry, #verify {
   width: 100%;
+  padding: 14px;
+  font-weight: bold;
+  margin-top: 8px;
+}
+#verify {
   background: #087c66;
   color: white;
   border: 0;
-  padding: 14px;
-  font-weight: bold;
+}
+#retry {
+  color: #087c66;
 }
 #widget { margin: 24px 0; }
 #status {
@@ -74,11 +85,22 @@ button {
   font-size: 14px;
   margin-bottom: 16px;
 }
-#status.success { color: #087c66; background: #e0f5e9; }
-#status.error { color: #b91c1c; background: #fef2f2; }
-footer { font-size: 12px; color: #64748b; margin-top: 25px; }
+#status.success {
+  color: #087c66;
+  background: #e0f5e9;
+}
+#status.error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+footer {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 25px;
+}
 </style>
 </head>
+
 <body>
 <main>
   <div class="language">
@@ -87,8 +109,11 @@ footer { font-size: 12px; color: #64748b; margin-top: 25px; }
   </div>
 
   <div class="logo">
-    <svg width="38" height="38" viewBox="0 0 24 24"
-         fill="none" stroke="white" stroke-width="1.8"
+    <svg width="38" height="38"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="white"
+         stroke-width="1.8"
          aria-hidden="true">
       <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
       <path d="m8 12 3 3 5-6"/>
@@ -99,65 +124,133 @@ footer { font-size: 12px; color: #64748b; margin-top: 25px; }
   <div class="brand">TEKNOLOGIA TECH</div>
 
   <h2 id="heading">Verifikasi Keamanan</h2>
-  <p id="description">
-    Selesaikan pemeriksaan keamanan untuk melanjutkan.
-  </p>
+  <p id="description"></p>
 
   <div id="widget"></div>
-  <div id="status" role="status" aria-live="polite">
+
+  <div id="status" role="status"
+       aria-live="polite">
     Memuat verifikasi...
   </div>
 
-  <button type="button" id="retry">Ulangi verifikasi</button>
-  <footer>© 2026 Teknologia Tech</footer>
+  <button id="verify" type="button" disabled>
+    Uji autentikasi server
+  </button>
+
+  <button id="retry" type="button">
+    Ulangi verifikasi
+  </button>
+
+  <footer>
+    © 2026 Teknologia Tech
+    <br>
+    Security Test — v2.35.3-beta.5
+  </footer>
 </main>
 
-<script>
-"use strict";
+<script type="module">
+import { createClient } from
+"https://esm.sh/@supabase/supabase-js@2";
 
-const SITE_KEY = "0x4AAAAAAGVklbjRU9m5_3Gk";
+const SITE_KEY =
+  "0x4AAAAAAGVklbjRU9m5_3Gk";
+
+const SUPABASE_URL =
+  "https://owemxpqdsivckapdijlw.supabase.co";
+
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_SkLHCYyHk6xi64DSNoS-YQ_I-SEwNlt";
+
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  }
+);
 
 const messages = {
   id: {
     title: "Verifikasi Keamanan",
-    desc: "Selesaikan pemeriksaan keamanan untuk melanjutkan.",
+    desc: "Selesaikan CAPTCHA, kemudian uji autentikasi server.",
     loading: "Memuat verifikasi...",
     ready: "Silakan selesaikan pemeriksaan keamanan.",
-    success: "Pemeriksaan CAPTCHA selesai. Validasi server masih diperlukan.",
+    captcha: "CAPTCHA berhasil. Silakan uji autentikasi server.",
+    processing: "Memvalidasi token melalui Supabase...",
+    success: "Autentikasi anonim Supabase berhasil.",
     expired: "Verifikasi kedaluwarsa. Silakan ulangi.",
     error: "Verifikasi gagal. Silakan coba kembali.",
+    verify: "Uji autentikasi server",
     retry: "Ulangi verifikasi"
   },
   en: {
     title: "Security Verification",
-    desc: "Complete the security check to continue.",
+    desc: "Complete CAPTCHA, then test server authentication.",
     loading: "Loading verification...",
     ready: "Please complete the security check.",
-    success: "CAPTCHA completed. Server validation is still required.",
+    captcha: "CAPTCHA completed. Test server authentication.",
+    processing: "Validating token through Supabase...",
+    success: "Supabase anonymous authentication successful.",
     expired: "Verification expired. Please try again.",
     error: "Verification failed. Please try again.",
+    verify: "Test server authentication",
     retry: "Retry verification"
   }
 };
 
-let language = navigator.language.startsWith("id") ? "id" : "en";
-let widgetId = null;
-let currentState = "loading";
+const verifyButton = document.getElementById("verify");
+const retryButton = document.getElementById("retry");
 
-function setStatus(state) {
+let language =
+  navigator.language.startsWith("id") ? "id" : "en";
+
+let widgetId = null;
+let captchaToken = null;
+let currentState = "loading";
+let busy = false;
+let completed = false;
+let errorCode = "";
+
+function setStatus(state, code = "") {
   currentState = state;
+  errorCode = code;
+
   const el = document.getElementById("status");
-  el.textContent = messages[language][state];
-  el.className = state === "success" ? "success" :
-                 state === "error" ? "error" : "";
+
+  el.textContent =
+    messages[language][state] +
+    (code ? " (" + code + ")" : "");
+
+  el.className =
+    state === "success" || state === "captcha"
+      ? "success"
+      : state === "error"
+        ? "error"
+        : "";
+}
+
+function updateControls() {
+  verifyButton.disabled =
+    busy || completed || !captchaToken;
+
+  retryButton.disabled = busy || completed;
+
+  document.getElementById("lang-id").disabled = busy;
+  document.getElementById("lang-en").disabled = busy;
 }
 
 function renderWidget() {
-  if (!window.turnstile) return;
+  if (!window.turnstile || completed || busy) return;
+
+  captchaToken = null;
+  updateControls();
 
   if (widgetId !== null) {
     turnstile.remove(widgetId);
-    widgetId = null;
   }
 
   setStatus("ready");
@@ -167,20 +260,27 @@ function renderWidget() {
     theme: "light",
     size: "flexible",
     language: language,
+
     callback: function(token) {
-      // Initial widget test only.
-      // No token storage or logging.
-      // Server authentication will be integrated separately.
-      setStatus("success");
+      captchaToken = token;
+      setStatus("captcha");
+      updateControls();
     },
+
     "expired-callback": function() {
-      setStatus("expired");
+      captchaToken = null;
+      if (!completed && !busy) {
+        setStatus("expired");
+        updateControls();
+      }
     },
+
     "error-callback": function() {
-      setStatus("error");
-    },
-    "timeout-callback": function() {
-      setStatus("expired");
+      captchaToken = null;
+      if (!completed && !busy) {
+        setStatus("error");
+        updateControls();
+      }
     }
   });
 }
@@ -188,15 +288,91 @@ function renderWidget() {
 function setLanguage(value) {
   language = value;
   document.documentElement.lang = value;
+
   document.getElementById("heading").textContent =
     messages[value].title;
+
   document.getElementById("description").textContent =
     messages[value].desc;
-  document.getElementById("retry").textContent =
-    messages[value].retry;
-  setStatus(currentState);
-  if (window.turnstile) renderWidget();
+
+  verifyButton.textContent = messages[value].verify;
+  retryButton.textContent = messages[value].retry;
+
+  setStatus(currentState, errorCode);
+
+  if (window.turnstile && !completed && !busy) {
+    renderWidget();
+  }
 }
+
+async function verifyAuthentication() {
+  if (busy || completed || !captchaToken) return;
+
+  busy = true;
+
+  const token = captchaToken;
+  captchaToken = null;
+
+  updateControls();
+  setStatus("processing");
+
+  try {
+    const { data, error } =
+      await supabase.auth.signInAnonymously({
+        options: {
+          captchaToken: token
+        }
+      });
+
+    if (error) {
+      const safeCode =
+        /^[a-z0-9_]{1,80}$/i.test(error.code || "")
+          ? error.code
+          : "AUTH_FAILED";
+
+      setStatus("error", safeCode);
+      return;
+    }
+
+    if (
+      !data.session ||
+      !data.user ||
+      data.user.is_anonymous !== true
+    ) {
+      setStatus("error", "INVALID_SESSION");
+      return;
+    }
+
+    completed = true;
+    setStatus("success");
+
+    // End temporary browser session.
+    // Do not publish or log authentication tokens.
+    await supabase.auth.signOut({ scope: "local" });
+
+  } catch {
+    if (!completed) {
+      setStatus("error", "CONNECTION_FAILED");
+    }
+  } finally {
+    busy = false;
+    updateControls();
+  }
+}
+
+verifyButton.onclick = verifyAuthentication;
+
+retryButton.onclick = () => {
+  if (busy || completed) return;
+
+  captchaToken = null;
+
+  if (window.turnstile) {
+    renderWidget();
+  } else {
+    location.reload();
+  }
+};
 
 document.getElementById("lang-id").onclick =
   () => setLanguage("id");
@@ -204,23 +380,19 @@ document.getElementById("lang-id").onclick =
 document.getElementById("lang-en").onclick =
   () => setLanguage("en");
 
-document.getElementById("retry").onclick = () => {
-  if (widgetId !== null && window.turnstile) {
-    setStatus("ready");
-    turnstile.reset(widgetId);
-  } else {
-    location.reload();
-  }
-};
-
 window.onTurnstileLoaded = renderWidget;
+
 setLanguage(language);
+updateControls();
 
 const script = document.createElement("script");
+
 script.src =
   "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoaded";
+
 script.async = true;
 script.onerror = () => setStatus("error");
+
 document.head.appendChild(script);
 </script>
 </body>
