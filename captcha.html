@@ -181,7 +181,7 @@ const messages = {
     ready: "Silakan selesaikan pemeriksaan keamanan.",
     captcha: "CAPTCHA berhasil. Silakan uji autentikasi server.",
     processing: "Memvalidasi token melalui Supabase...",
-    success: "Autentikasi anonim Supabase berhasil.",
+    success: "Autentikasi Supabase dan validasi JWT berhasil.",
     expired: "Verifikasi kedaluwarsa. Silakan ulangi.",
     error: "Verifikasi gagal. Silakan coba kembali.",
     verify: "Uji autentikasi server",
@@ -194,7 +194,7 @@ const messages = {
     ready: "Please complete the security check.",
     captcha: "CAPTCHA completed. Test server authentication.",
     processing: "Validating token through Supabase...",
-    success: "Supabase anonymous authentication successful.",
+    success: "Supabase authentication and JWT validation successful.",
     expired: "Verification expired. Please try again.",
     error: "Verification failed. Please try again.",
     verify: "Test server authentication",
@@ -343,8 +343,38 @@ async function verifyAuthentication() {
       return;
     }
 
-    completed = true;
-    setStatus("success");
+    
+const { data: apiResult, error: apiError } =
+  await supabase.functions.invoke(
+    "reviewer-access",
+    {
+      body: {
+        action: "session-check"
+      },
+      headers: {
+        Authorization:
+          "Bearer " + data.session.access_token
+      }
+    }
+  );
+
+if (
+  apiError ||
+  !apiResult ||
+  apiResult.success !== true ||
+  apiResult.code !== "SESSION_VALIDATED" ||
+  apiResult.anonymous_session !== true ||
+  apiResult.version !== "2.35.3-beta.5" ||
+  apiResult.entitlement_issued !== false
+) {
+  await supabase.auth.signOut({ scope: "local" });
+  setStatus("error", "JWT_VALIDATION_FAILED");
+  return;
+}
+
+completed = true;
+setStatus("success", "JWT_VALIDATED");
+
 
     // End temporary browser session.
     // Do not publish or log authentication tokens.
