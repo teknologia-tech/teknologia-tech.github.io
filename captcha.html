@@ -140,7 +140,7 @@ footer {
   </button>
 
   <footer>
-    © 2026 Teknologia Tech · v2.35.6.4
+    © 2026 Teknologia Tech · v2.35.6.4.1
 
   </footer>
 </main>
@@ -397,7 +397,10 @@ setStatus("success");
       setStatus("error", "CONNECTION_FAILED");
     }
   } finally {
-    try { await supabase.auth.signOut({ scope: "local" }); } catch {}
+    // Native activation consumes the in-memory access token. Do not revoke its session before handoff.
+    if (!nativeActivation || !completed) {
+      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
+    }
     busy = false;
     updateControls();
   }
