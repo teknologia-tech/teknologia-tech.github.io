@@ -1,0 +1,9 @@
+PANDUAN GITHUB PAGES — POS KASIRKU
+1. Buat akun atau login github.com. Buat repository publik bernama USERNAME.github.io (ganti USERNAME dengan username GitHub Anda). Jika sudah ada, jangan timpa website lama; gunakan repository pos-kasirku dan koordinasikan app-ads.txt pada root domain.
+2. Ekstrak ZIP. Upload isi folder website (index.html, privacy.html, terms.html, delete-data.html, support.html, assets, .nojekyll) ke root repository, bukan ZIP. Commit ke main.
+3. Settings > Pages > Build and deployment > Deploy from a branch > main > /(root) > Save. Tunggu URL tampil.
+4. Buka https://USERNAME.github.io/privacy.html (contoh pola, bukan URL aktif). Uji lewat incognito. Untuk repo pos-kasirku gunakan /pos-kasirku/privacy.html.
+5. Setelah audit kebijakan, masukkan URL aktual di Play Console dan gunakan --dart-define=PRIVACY_POLICY_URL=URL pada build Flutter bersama define produksi lain.
+6. AdMob: setelah memperoleh baris resmi app-ads.txt, buat file app-ads.txt pada root hostname developer website. Jangan gunakan ID contoh.
+7. Jangan upload source Flutter, keystore, token atau database ke repository website.
+CATATAN AUDIT: baseline PC memuat SDK iklan 7.0.0, sample App ID, endpoint PLAY_VERIFY_URL dan SEMIPRO_URL yang dikonfigurasi saat build, serta PRIVACY_POLICY_URL. Retensi dan penghapusan backend, konfigurasi iklan produksi, merged manifest, serta deklarasi Data Safety belum diverifikasi. Tinjau dan lengkapi sebelum publikasi final.
