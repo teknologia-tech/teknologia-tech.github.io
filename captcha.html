@@ -78,6 +78,9 @@ button:disabled {
   color: #087c66;
 }
 #widget { margin: 24px 0; }
+#reviewer-label { display:block; text-align:left; font-size:14px; font-weight:600; margin: 12px 0 6px; }
+#reviewer-code { width:100%; border:1px solid #d1ded9; border-radius:10px; padding:12px; font-size:16px; }
+#reviewer-code:focus { outline:2px solid #087c66; outline-offset:2px; }
 #status {
   padding: 12px;
   border-radius: 12px;
@@ -133,6 +136,8 @@ footer {
     Memuat verifikasi...
   </div>
 
+  <label id="reviewer-label" for="reviewer-code">Kode akses reviewer (pengujian)</label>
+  <input id="reviewer-code" type="password" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" required>
   <button id="verify" type="button" disabled>
     Uji autentikasi server
   </button>
@@ -144,7 +149,7 @@ footer {
   <footer>
     © 2026 Teknologia Tech
     <br>
-    Security Test — v2.35.3-beta.5
+    Reviewer Credential Test — v2.35.3-beta.6 (API beta.5)
   </footer>
 </main>
 
@@ -176,34 +181,37 @@ const supabase = createClient(
 const messages = {
   id: {
     title: "Verifikasi Keamanan",
-    desc: "Selesaikan CAPTCHA, kemudian uji autentikasi server.",
+    desc: "Masukkan kode reviewer, selesaikan CAPTCHA, lalu uji akses.",
     loading: "Memuat verifikasi...",
     ready: "Silakan selesaikan pemeriksaan keamanan.",
-    captcha: "CAPTCHA berhasil. Silakan uji autentikasi server.",
+    captcha: "CAPTCHA berhasil. Silakan uji akses reviewer.",
     processing: "Memvalidasi token melalui Supabase...",
-    success: "Autentikasi Supabase dan validasi JWT berhasil.",
+    success: "Autentikasi, JWT, dan kredensial reviewer berhasil divalidasi. Lisensi belum diterbitkan.",
+    reviewerLabel: "Kode akses reviewer (pengujian)",
     expired: "Verifikasi kedaluwarsa. Silakan ulangi.",
     error: "Verifikasi gagal. Silakan coba kembali.",
-    verify: "Uji autentikasi server",
+    verify: "Uji akses reviewer",
     retry: "Ulangi verifikasi"
   },
   en: {
     title: "Security Verification",
-    desc: "Complete CAPTCHA, then test server authentication.",
+    desc: "Enter the reviewer code, complete CAPTCHA, then test access.",
     loading: "Loading verification...",
     ready: "Please complete the security check.",
-    captcha: "CAPTCHA completed. Test server authentication.",
+    captcha: "CAPTCHA completed. Test reviewer access.",
     processing: "Validating token through Supabase...",
-    success: "Supabase authentication and JWT validation successful.",
+    success: "Authentication, JWT and reviewer credentials validated. No entitlement issued.",
+    reviewerLabel: "Reviewer access code (test)",
     expired: "Verification expired. Please try again.",
     error: "Verification failed. Please try again.",
-    verify: "Test server authentication",
+    verify: "Test reviewer access",
     retry: "Retry verification"
   }
 };
 
 const verifyButton = document.getElementById("verify");
 const retryButton = document.getElementById("retry");
+const reviewerInput = document.getElementById("reviewer-code");
 
 let language =
   navigator.language.startsWith("id") ? "id" : "en";
@@ -235,7 +243,8 @@ function setStatus(state, code = "") {
 
 function updateControls() {
   verifyButton.disabled =
-    busy || completed || !captchaToken;
+    busy || completed || !captchaToken || !/^[0-9a-f]{32}$/i.test(reviewerInput.value.trim());
+  reviewerInput.disabled = busy || completed;
 
   retryButton.disabled = busy || completed;
 
@@ -262,6 +271,7 @@ function renderWidget() {
     language: language,
 
     callback: function(token) {
+      if (busy || completed) return;
       captchaToken = token;
       setStatus("captcha");
       updateControls();
@@ -295,6 +305,7 @@ function setLanguage(value) {
   document.getElementById("description").textContent =
     messages[value].desc;
 
+  document.getElementById("reviewer-label").textContent = messages[value].reviewerLabel;
   verifyButton.textContent = messages[value].verify;
   retryButton.textContent = messages[value].retry;
 
@@ -307,91 +318,74 @@ function setLanguage(value) {
 
 async function verifyAuthentication() {
   if (busy || completed || !captchaToken) return;
-
+  let reviewerCode = reviewerInput.value.trim().toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(reviewerCode)) return;
+  reviewerInput.value = "";
   busy = true;
-
   const token = captchaToken;
   captchaToken = null;
-
   updateControls();
   setStatus("processing");
-
+  let signedIn = false;
   try {
-    const { data, error } =
-      await supabase.auth.signInAnonymously({
-        options: {
-          captchaToken: token
-        }
-      });
-
+    const { data, error } = await supabase.auth.signInAnonymously({
+      options: { captchaToken: token }
+    });
     if (error) {
-      const safeCode =
-        /^[a-z0-9_]{1,80}$/i.test(error.code || "")
-          ? error.code
-          : "AUTH_FAILED";
-
+      const safeCode = /^[a-z0-9_]{1,80}$/i.test(error.code || "") ? error.code : "AUTH_FAILED";
       setStatus("error", safeCode);
       return;
     }
-
-    if (
-      !data.session ||
-      !data.user ||
-      data.user.is_anonymous !== true
-    ) {
+    signedIn = !!data.session;
+    if (!data.session || !data.user || data.user.is_anonymous !== true) {
       setStatus("error", "INVALID_SESSION");
       return;
     }
-
-    
-const { data: apiResult, error: apiError } =
-  await supabase.functions.invoke(
-    "reviewer-access",
-    {
-      body: {
-        action: "session-check"
-      },
-      headers: {
-        Authorization:
-          "Bearer " + data.session.access_token
-      }
+    const headers = {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_PUBLISHABLE_KEY,
+      "Authorization": "Bearer " + data.session.access_token
+    };
+    const endpoint = SUPABASE_URL + "/functions/v1/reviewer-access";
+    const sessionResponse = await fetch(endpoint, {
+      method: "POST", headers, body: JSON.stringify({ action: "session-check" })
+    });
+    const sessionResult = await sessionResponse.json();
+    if (sessionResponse.status !== 200 || sessionResult.success !== true ||
+        sessionResult.code !== "SESSION_VALIDATED" || sessionResult.anonymous_session !== true ||
+        sessionResult.version !== "2.35.3-beta.5" || sessionResult.entitlement_issued !== false) {
+      setStatus("error", "JWT_VALIDATION_FAILED");
+      return;
     }
-  );
-
-if (
-  apiError ||
-  !apiResult ||
-  apiResult.success !== true ||
-  apiResult.code !== "SESSION_VALIDATED" ||
-  apiResult.anonymous_session !== true ||
-  apiResult.version !== "2.35.3-beta.5" ||
-  apiResult.entitlement_issued !== false
-) {
-  await supabase.auth.signOut({ scope: "local" });
-  setStatus("error", "JWT_VALIDATION_FAILED");
-  return;
-}
-
-
-
-completed = true;
-setStatus("success", "JWT_VALIDATED");
-
-
-
-    // End temporary browser session.
-    // Do not publish or log authentication tokens.
-    await supabase.auth.signOut({ scope: "local" });
-
+    const response = await fetch(endpoint, {
+      method: "POST", headers,
+      body: JSON.stringify({ action: "authenticate", access_code: reviewerCode })
+    });
+    reviewerCode = "";
+    const result = await response.json();
+    if (response.status !== 200 || result.success !== true ||
+        result.code !== "CREDENTIAL_VALIDATED" || result.entitlement_issued !== false ||
+        result.version !== "2.35.3-beta.5") {
+      const safeCode = ["INVALID_CREDENTIALS", "RATE_LIMITED", "SECURITY_CHECK_UNAVAILABLE", "DATABASE_UNAVAILABLE", "INVALID_SESSION"].includes(result.code) ? result.code : "REVIEWER_VALIDATION_FAILED";
+      setStatus("error", safeCode);
+      return;
+    }
+    completed = true;
+    setStatus("success", "REVIEWER_VALIDATED");
   } catch {
-    if (!completed) {
-      setStatus("error", "CONNECTION_FAILED");
-    }
+    if (!completed) setStatus("error", "CONNECTION_FAILED");
   } finally {
+    reviewerCode = "";
+    reviewerInput.value = "";
+    if (signedIn) {
+      try { await supabase.auth.signOut({ scope: "local" }); } catch { /* session is not persisted */ }
+    }
     busy = false;
     updateControls();
   }
 }
+
+reviewerInput.addEventListener("input", updateControls);
 
 verifyButton.onclick = verifyAuthentication;
 
