@@ -372,8 +372,56 @@ if (
   return;
 }
 
+
+const testResults = [];
+
+for (let i = 1; i <= 6; i++) {
+  const response = await fetch(
+    SUPABASE_URL + "/functions/v1/reviewer-access",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_PUBLISHABLE_KEY,
+        "Authorization":
+          "Bearer " + data.session.access_token
+      },
+      body: JSON.stringify({
+        action: "authenticate",
+        access_code: "00000000000000000000000000000000"
+      })
+    }
+  );
+
+  const result = await response.json();
+
+  const expected =
+    i <= 5
+      ? "INVALID_CREDENTIALS"
+      : "RATE_LIMITED";
+
+  const expectedStatus = i <= 5 ? 401 : 429;
+
+  if (
+    result.success !== false ||
+    result.code !== expected ||
+    response.status !== expectedStatus
+  ) {
+    await supabase.auth.signOut({ scope: "local" });
+    setStatus("error", "RATE_LIMIT_TEST_FAILED_" + i);
+    return;
+  }
+
+  testResults.push(response.status);
+}
+
 completed = true;
-setStatus("success", "JWT_VALIDATED");
+
+setStatus(
+  "success",
+  "RATE_LIMIT_VALIDATED: " + testResults.join(", ")
+);
+
 
 
     // End temporary browser session.
