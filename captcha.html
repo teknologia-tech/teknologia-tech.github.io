@@ -1,0 +1,227 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Verifikasi Keamanan | POS KasirKu</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #edf5f2;
+  font-family: system-ui, sans-serif;
+  color: #173e36;
+}
+main {
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 12px 40px #173e3615;
+  text-align: center;
+}
+.logo {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto;
+  background: #087c66;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+}
+h1 { font-size: 26px; margin-bottom: 4px; }
+h2 { font-size: 20px; }
+p { color: #64748b; line-height: 1.6; }
+.brand {
+  font-size: 11px;
+  letter-spacing: 3px;
+  font-weight: bold;
+}
+.language {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 15px;
+}
+button {
+  border: 1px solid #d1ded9;
+  border-radius: 10px;
+  background: white;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+#retry {
+  width: 100%;
+  background: #087c66;
+  color: white;
+  border: 0;
+  padding: 14px;
+  font-weight: bold;
+}
+#widget { margin: 24px 0; }
+#status {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f0f5f3;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+#status.success { color: #087c66; background: #e0f5e9; }
+#status.error { color: #b91c1c; background: #fef2f2; }
+footer { font-size: 12px; color: #64748b; margin-top: 25px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="language">
+    <button id="lang-id" type="button">ID</button>
+    <button id="lang-en" type="button">EN</button>
+  </div>
+
+  <div class="logo">
+    <svg width="38" height="38" viewBox="0 0 24 24"
+         fill="none" stroke="white" stroke-width="1.8"
+         aria-hidden="true">
+      <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
+      <path d="m8 12 3 3 5-6"/>
+    </svg>
+  </div>
+
+  <h1>POS KasirKu</h1>
+  <div class="brand">TEKNOLOGIA TECH</div>
+
+  <h2 id="heading">Verifikasi Keamanan</h2>
+  <p id="description">
+    Selesaikan pemeriksaan keamanan untuk melanjutkan.
+  </p>
+
+  <div id="widget"></div>
+  <div id="status" role="status" aria-live="polite">
+    Memuat verifikasi...
+  </div>
+
+  <button type="button" id="retry">Ulangi verifikasi</button>
+  <footer>© 2026 Teknologia Tech</footer>
+</main>
+
+<script>
+"use strict";
+
+const SITE_KEY = "0x4AAAAAAGVklbjRU9m5_3Gk";
+
+const messages = {
+  id: {
+    title: "Verifikasi Keamanan",
+    desc: "Selesaikan pemeriksaan keamanan untuk melanjutkan.",
+    loading: "Memuat verifikasi...",
+    ready: "Silakan selesaikan pemeriksaan keamanan.",
+    success: "Pemeriksaan CAPTCHA selesai. Validasi server masih diperlukan.",
+    expired: "Verifikasi kedaluwarsa. Silakan ulangi.",
+    error: "Verifikasi gagal. Silakan coba kembali.",
+    retry: "Ulangi verifikasi"
+  },
+  en: {
+    title: "Security Verification",
+    desc: "Complete the security check to continue.",
+    loading: "Loading verification...",
+    ready: "Please complete the security check.",
+    success: "CAPTCHA completed. Server validation is still required.",
+    expired: "Verification expired. Please try again.",
+    error: "Verification failed. Please try again.",
+    retry: "Retry verification"
+  }
+};
+
+let language = navigator.language.startsWith("id") ? "id" : "en";
+let widgetId = null;
+let currentState = "loading";
+
+function setStatus(state) {
+  currentState = state;
+  const el = document.getElementById("status");
+  el.textContent = messages[language][state];
+  el.className = state === "success" ? "success" :
+                 state === "error" ? "error" : "";
+}
+
+function renderWidget() {
+  if (!window.turnstile) return;
+
+  if (widgetId !== null) {
+    turnstile.remove(widgetId);
+    widgetId = null;
+  }
+
+  setStatus("ready");
+
+  widgetId = turnstile.render("#widget", {
+    sitekey: SITE_KEY,
+    theme: "light",
+    size: "flexible",
+    language: language,
+    callback: function(token) {
+      // Initial widget test only.
+      // No token storage or logging.
+      // Server authentication will be integrated separately.
+      setStatus("success");
+    },
+    "expired-callback": function() {
+      setStatus("expired");
+    },
+    "error-callback": function() {
+      setStatus("error");
+    },
+    "timeout-callback": function() {
+      setStatus("expired");
+    }
+  });
+}
+
+function setLanguage(value) {
+  language = value;
+  document.documentElement.lang = value;
+  document.getElementById("heading").textContent =
+    messages[value].title;
+  document.getElementById("description").textContent =
+    messages[value].desc;
+  document.getElementById("retry").textContent =
+    messages[value].retry;
+  setStatus(currentState);
+  if (window.turnstile) renderWidget();
+}
+
+document.getElementById("lang-id").onclick =
+  () => setLanguage("id");
+
+document.getElementById("lang-en").onclick =
+  () => setLanguage("en");
+
+document.getElementById("retry").onclick = () => {
+  if (widgetId !== null && window.turnstile) {
+    setStatus("ready");
+    turnstile.reset(widgetId);
+  } else {
+    location.reload();
+  }
+};
+
+window.onTurnstileLoaded = renderWidget;
+setLanguage(language);
+
+const script = document.createElement("script");
+script.src =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoaded";
+script.async = true;
+script.onerror = () => setStatus("error");
+document.head.appendChild(script);
+</script>
+</body>
+</html>
