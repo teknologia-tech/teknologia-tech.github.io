@@ -140,7 +140,7 @@ footer {
   </button>
 
   <footer>
-    © 2026 Teknologia Tech
+    © 2026 Teknologia Tech · v2.35.6.4
 
   </footer>
 </main>
@@ -209,6 +209,14 @@ let currentState = "loading";
 let busy = false;
 let completed = false;
 let errorCode = "";
+const params = new URLSearchParams(location.search);
+const nativeNonce = params.get("nonce");
+const nativeActivation = params.get("activation") === "1" && /^[0-9a-f-]{36}$/.test(nativeNonce || "");
+let pendingJwt = null;
+window.kasirkuTakeSession = (nonce) => {
+  if (!nativeActivation || nonce !== nativeNonce || !pendingJwt) return null;
+  const jwt = pendingJwt; pendingJwt = null; return jwt;
+};
 
 function setStatus(state, code = "") {
   currentState = state;
@@ -372,6 +380,10 @@ if (
 
 
 
+if (nativeActivation) {
+  pendingJwt = data.session.access_token;
+  setTimeout(() => { pendingJwt = null; }, 90000);
+}
 completed = true;
 setStatus("success");
 
