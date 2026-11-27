@@ -133,8 +133,10 @@ footer {
     Memuat verifikasi...
   </div>
 
+  <label for="test-code" id="code-label">Kode pengujian sementara</label>
+  <input id="test-code" type="password" maxlength="32" autocomplete="off" spellcheck="false" style="width:100%;padding:12px;border:1px solid #d1ded9;border-radius:10px;margin:8px 0" />
   <button id="verify" type="button" disabled>
-    Uji autentikasi server
+    Uji lisensi staging
   </button>
 
   <button id="retry" type="button">
@@ -144,7 +146,7 @@ footer {
   <footer>
     © 2026 Teknologia Tech
     <br>
-    Security Test — v2.35.3-beta.5
+    License Staging Test — v2.35.4.4
   </footer>
 </main>
 
@@ -176,34 +178,36 @@ const supabase = createClient(
 const messages = {
   id: {
     title: "Verifikasi Keamanan",
-    desc: "Selesaikan CAPTCHA, kemudian uji autentikasi server.",
+    desc: "Masukkan kode pengujian sementara, selesaikan CAPTCHA, lalu uji lisensi staging.",
     loading: "Memuat verifikasi...",
     ready: "Silakan selesaikan pemeriksaan keamanan.",
     captcha: "CAPTCHA berhasil. Silakan uji autentikasi server.",
     processing: "Memvalidasi token melalui Supabase...",
-    success: "Autentikasi Supabase dan validasi JWT berhasil.",
+    success: "Seluruh pemeriksaan lisensi staging berhasil.",
     expired: "Verifikasi kedaluwarsa. Silakan ulangi.",
     error: "Verifikasi gagal. Silakan coba kembali.",
-    verify: "Uji autentikasi server",
+    verify: "Uji lisensi staging",
     retry: "Ulangi verifikasi"
   },
   en: {
     title: "Security Verification",
-    desc: "Complete CAPTCHA, then test server authentication.",
+    desc: "Enter the temporary test code, complete CAPTCHA, then test the staging license.",
     loading: "Loading verification...",
     ready: "Please complete the security check.",
-    captcha: "CAPTCHA completed. Test server authentication.",
+    captcha: "CAPTCHA completed. Test staging license.",
     processing: "Validating token through Supabase...",
-    success: "Supabase authentication and JWT validation successful.",
+    success: "All staging license checks passed.",
     expired: "Verification expired. Please try again.",
     error: "Verification failed. Please try again.",
-    verify: "Test server authentication",
+    verify: "Test staging license",
     retry: "Retry verification"
   }
 };
 
 const verifyButton = document.getElementById("verify");
 const retryButton = document.getElementById("retry");
+const codeInput = document.getElementById("test-code");
+codeInput.addEventListener("input", updateControls);
 
 let language =
   navigator.language.startsWith("id") ? "id" : "en";
@@ -235,7 +239,8 @@ function setStatus(state, code = "") {
 
 function updateControls() {
   verifyButton.disabled =
-    busy || completed || !captchaToken;
+    busy || completed || !captchaToken || !/^[0-9a-f]{32}$/i.test(codeInput.value.trim());
+  codeInput.disabled = busy || completed;
 
   retryButton.disabled = busy || completed;
 
@@ -287,6 +292,7 @@ function renderWidget() {
 
 function setLanguage(value) {
   language = value;
+  document.getElementById("code-label").textContent = value === "id" ? "Kode pengujian sementara" : "Temporary test code";
   document.documentElement.lang = value;
 
   document.getElementById("heading").textContent =
@@ -305,89 +311,71 @@ function setLanguage(value) {
   }
 }
 
+const PUBLIC_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgINfY87GZ7cSAMURlCE91k4iFuXbeaQOyneh9giEjOmXxsJvbDm/r0wMV/F5Q/guJneVRsXgIipqmIMJv1HiNA==";
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+function decode64(s) {
+  return Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(s.length/4)*4,"=")), c=>c.charCodeAt(0));
+}
+function encode64(b) {
+  return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+}
+async function checkLicense(token, installation, now, key) {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    const [h,p,s] = parts;
+    const header = JSON.parse(decoder.decode(decode64(h)));
+    const claims = JSON.parse(decoder.decode(decode64(p)));
+    const signature = decode64(s);
+    if (header.alg !== "ES256" || header.typ !== "kasirku-staging+jws" || header.kid !== "kasirku-license-v1" || signature.length !== 64) return false;
+    if (!await crypto.subtle.verify({name:"ECDSA",hash:"SHA-256"},key,signature,encoder.encode(h+"."+p))) return false;
+    return claims.iss === "pos-kasirku-staging" && claims.aud === "com.teknologiatech.kasirku" && claims.test === true && claims.entitlement === "reviewer" && claims.sub === installation && claims.installation_hash === installation && typeof claims.jti === "string" && typeof claims.entitlement_id === "string" && Number.isSafeInteger(claims.iat) && Number.isSafeInteger(claims.exp) && claims.iat <= now+60 && now < claims.exp && claims.exp-claims.iat === 2592000;
+  } catch { return false; }
+}
 async function verifyAuthentication() {
-  if (busy || completed || !captchaToken) return;
-
+  if (busy || completed || !captchaToken || !/^[0-9a-f]{32}$/i.test(codeInput.value.trim())) return;
   busy = true;
-
   const token = captchaToken;
+  const accessCode = codeInput.value.trim();
+  codeInput.value = "";
   captchaToken = null;
-
   updateControls();
   setStatus("processing");
-
   try {
-    const { data, error } =
-      await supabase.auth.signInAnonymously({
-        options: {
-          captchaToken: token
-        }
-      });
-
-    if (error) {
-      const safeCode =
-        /^[a-z0-9_]{1,80}$/i.test(error.code || "")
-          ? error.code
-          : "AUTH_FAILED";
-
-      setStatus("error", safeCode);
-      return;
+    const {data,error} = await supabase.auth.signInAnonymously({options:{captchaToken:token}});
+    if (error || !data.session || data.user?.is_anonymous !== true) throw Error("AUTH_FAILED");
+    const installation = Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,"0")).join("");
+    const response = await fetch(SUPABASE_URL+"/functions/v1/reviewer-access", {
+      method:"POST", headers:{"Content-Type":"application/json",apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+data.session.access_token},
+      body:JSON.stringify({action:"issue-license",access_code:accessCode,installation_hash:installation})
+    });
+    const result = await response.json();
+    if (!response.ok || result.success !== true || result.code !== "TEST_LICENSE_ISSUED" || result.version !== "2.35.4.3" || result.test !== true || result.entitlement_issued !== true || typeof result.license !== "string") {
+      throw Error("ISSUE_FAILED_HTTP_"+response.status+(typeof result.code === "string" && /^[A-Z0-9_]{1,80}$/.test(result.code)?"_"+result.code:""));
     }
-
-    if (
-      !data.session ||
-      !data.user ||
-      data.user.is_anonymous !== true
-    ) {
-      setStatus("error", "INVALID_SESSION");
-      return;
-    }
-
-    
-const { data: apiResult, error: apiError } =
-  await supabase.functions.invoke(
-    "reviewer-access",
-    {
-      body: {
-        action: "session-check"
-      },
-      headers: {
-        Authorization:
-          "Bearer " + data.session.access_token
-      }
-    }
-  );
-
-if (
-  apiError ||
-  !apiResult ||
-  apiResult.success !== true ||
-  apiResult.code !== "SESSION_VALIDATED" ||
-  apiResult.anonymous_session !== true ||
-  apiResult.version !== "2.35.3-beta.5" ||
-  apiResult.entitlement_issued !== false
-) {
-  await supabase.auth.signOut({ scope: "local" });
-  setStatus("error", "JWT_VALIDATION_FAILED");
-  return;
-}
-
-
-
-completed = true;
-setStatus("success", "JWT_VALIDATED");
-
-
-
-    // End temporary browser session.
-    // Do not publish or log authentication tokens.
-    await supabase.auth.signOut({ scope: "local" });
-
-  } catch {
-    if (!completed) {
-      setStatus("error", "CONNECTION_FAILED");
-    }
+    const key = await crypto.subtle.importKey("spki",decode64(PUBLIC_KEY),{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);
+    const now = Math.floor(Date.now()/1000);
+    const [h,p,s] = result.license.split(".");
+    const claims = JSON.parse(decoder.decode(decode64(p)));
+    const changed = encode64(encoder.encode(JSON.stringify({...claims,entitlement:"premium"})));
+    const fake = decode64(s); fake[0] ^= 1;
+    const other = (installation[0] === "0" ? "1" : "0") + installation.slice(1);
+    const checks = [
+      await checkLicense(result.license,installation,now,key),
+      !await checkLicense(h+"."+changed+"."+s,installation,now,key),
+      !await checkLicense(h+"."+p+"."+encode64(fake),installation,now,key),
+      !await checkLicense(result.license,other,now,key),
+      !await checkLicense(result.license,installation,claims.exp,key)
+    ];
+    if (!checks.every(Boolean)) throw Error("LICENSE_CHECK_FAILED_"+checks.map(x=>x?"PASS":"FAIL").join("_"));
+    completed = true;
+    setStatus("success","LICENSE_TEST_PASSED: 5/5");
+  } catch(e) {
+    const msg = e instanceof Error ? e.message : "";
+    setStatus("error", /^[A-Z0-9_]{1,140}$/.test(msg)?msg:"TEST_FAILED");
   } finally {
+    try { await supabase.auth.signOut({scope:"local"}); } catch {}
     busy = false;
     updateControls();
   }
